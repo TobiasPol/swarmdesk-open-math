@@ -1,0 +1,10 @@
+import Targets.Erdos7OddCovering.Spec
+import Targets.LonelyRunner11.Spec
+import Targets.ErdosGyarfas.Spec
+import Targets.UnionClosedSets.Spec
+import Targets.ErdosStraus.Spec
+import Targets.HerzogSchonheim.Spec
+import Targets.Ramsey56.Spec
+import Targets.Schur6.Spec
+import Targets.CapSet8.Spec
+import Targets.Vdw35.Spec

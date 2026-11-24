@@ -1,0 +1,129 @@
+name: deciding
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "Targets/**/Proof.lean"
+      - "Targets/**/Lemmas/*.lean"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  judge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: deciding-judge-${{ github.event.pull_request.number || inputs.pr }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SWARMDESK_URL: ${{ vars.SWARMDESK_URL }}
+    steps:
+      - name: Refuse malformed input
+        run: |
+          set -eu
+          printf '%s' "$PR" | grep -Eqx '[1-9][0-9]{0,6}' || { echo "REFUSED: bad pr"; exit 1; }
+          [ "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "REFUSED: not default branch"; exit 1; }
+
+      - name: Check out BASE only (never checks out fork)
+        run: |
+          set -eu
+          git init -q .
+          git fetch -q --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]
+
+      - name: Install elan and bubblewrap
+        run: |
+          set -eu
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Mathlib and build cache (read-only)
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .lake/packages
+            .lake/build
+            ~/.elan/toolchains
+          key: lean-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lakefile.toml', 'lake-manifest.json') }}
+
+      - name: Fetch Mathlib .olean cache if needed
+        run: lake exe cache get
+
+      - name: Judge the single Lean file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: OUT="$RUNNER_TEMP/out" scripts/ci-judge.sh
+
+      - name: Upload verdict and exact judged bytes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verdict
+          path: |
+            ${{ runner.temp }}/out/final.json
+            ${{ runner.temp }}/out/candidate.lean
+          if-no-files-found: ignore
+          retention-days: 30
+
+  report:
+    needs: judge
+    if: ${{ always() && needs.judge.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: deciding-report-${{ github.event.pull_request.number || inputs.pr }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      SWARMDESK_URL: ${{ vars.SWARMDESK_URL }}
+    outputs:
+      recorded: ${{ steps.act.outputs.recorded }}
+    steps:
+      - name: Download verdict artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: verdict
+          path: verdict
+
+      - name: Fetch report scripts from BASE
+        run: |
+          set -eu
+          git init -q base
+          git -C base fetch -q --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git -C base checkout -q --detach FETCH_HEAD
+
+      - name: Commit exact judged bytes on ACCEPTED, comment, and notify Swarmdesk
+        id: act
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERDICT_SECRET: ${{ secrets.SWARMDESK_VERDICT_SECRET }}
+        run: base/scripts/ci-report.sh verdict/final.json
+
+  selftest:
+    needs: report
+    if: needs.report.outputs.recorded == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/selftest.yml

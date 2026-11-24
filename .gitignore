@@ -1,0 +1,23 @@
+# Lean / Lake build outputs
+.lake/
+build/
+*.olean
+*.ilean
+*.trace
+
+# Environment
+.env
+.env.*
+.env.local
+!.env.example
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Local AI config
+.claude/settings.local.json
+CLAUDE.local.md

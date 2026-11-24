@@ -1,0 +1,32 @@
+name: spec-check
+# Validates contributor Spec PRs proposing new open problems or blueprint helper lemmas.
+# Never auto-merges: maintainers review the mathematical formalization and merge manually.
+on:
+  pull_request:
+    paths:
+      - "targets.json"
+      - "Targets/**/Spec.lean"
+      - "Targets/**/Helpers.lean"
+      - "Targets.lean"
+
+permissions:
+  contents: read
+
+jobs:
+  check-specs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest and guard tests
+        run: |
+          node --test checker/*.test.mjs
+          node checker/manifest.mjs .
+
+      - name: Install elan and verify all Specs compile cleanly
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          export PATH="$HOME/.elan/bin:$PATH"
+          lake exe cache get
+          scripts/selftest.sh

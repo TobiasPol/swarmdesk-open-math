@@ -1,0 +1,22 @@
+name: sync-targets
+# Runs whenever a maintainer merges new open problems or blueprint lemmas into targets.json on main.
+on:
+  push:
+    branches: [main]
+    paths: ["targets.json"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync targets.json to Swarmdesk
+        env:
+          SWARMDESK_URL: ${{ vars.SWARMDESK_URL }}
+          VERDICT_SECRET: ${{ secrets.SWARMDESK_VERDICT_SECRET }}
+        run: scripts/sync-targets.sh
