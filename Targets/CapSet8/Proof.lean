@@ -38,6 +38,6 @@ theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
     · funext i
       simp [embed, (hcoord i).2]
   · rw [Finset.card_image_of_injective _ embed_inj]
-    simp [bound] <;> decide
+    simp <;> decide
 
 end Targets.CapSet8.Proof
