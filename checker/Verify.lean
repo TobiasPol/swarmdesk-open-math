@@ -91,12 +91,9 @@ private def replayCandidate (specMod candMod : Name) : IO (Environment × Enviro
   let specEnv ← importModules #[{ module := specMod }] {} (trustLevel := 0)
   let candEnv ← importModules #[{ module := candMod }] {} (trustLevel := 0)
   let mut newConsts : Std.HashMap Name ConstantInfo := {}
-  for i in [:candEnv.header.moduleNames.size] do
-    if (specEnv.getModuleIdx? candEnv.header.moduleNames[i]!).isNone then
-      for name in candEnv.header.moduleData[i]!.constNames do
-        if !specEnv.contains name then
-          if let some info := candEnv.find? name then
-            newConsts := newConsts.insert name info
+  for (name, info) in candEnv.constants.map₁ do
+    if !specEnv.contains name then
+      newConsts := newConsts.insert name info
   -- Replay all new constants through the Lean kernel inside a fresh environment.
   let replayed ← specEnv.replay newConsts
   pure (specEnv, replayed)
