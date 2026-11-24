@@ -20,6 +20,7 @@ private lemma embed_inj : Function.Injective embed := by
     exact absurd hi (by decide)
 
 theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
+  dsimp only [bound]
   refine ⟨Finset.univ.image embed, ?_, ?_⟩
   · intro x hx y hy z hz hsum
     rcases Finset.mem_image.mp hx with ⟨fx, _, rfl⟩

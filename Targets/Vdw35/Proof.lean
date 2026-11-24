@@ -9,6 +9,7 @@ private def blockColor (i : Fin 12) : Fin 3 :=
   ⟨i.val / 4, by omega⟩
 
 theorem proved : Targets.Vdw35.Spec.ValidBound bound := by
+  dsimp only [bound]
   refine ⟨blockColor, ?_⟩
   intro a d h4 hd ⟨h01, h12, h23, h34⟩
   have h04 : a / 4 = (a + 4 * d) / 4 := by

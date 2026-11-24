@@ -9,6 +9,7 @@ private def fourK4 (u v : Fin 16) : Bool :=
   decide (u ≠ v ∧ u.val / 4 = v.val / 4)
 
 theorem proved : Targets.Ramsey56.Spec.ValidBound bound := by
+  dsimp only [bound]
   refine ⟨fourK4, ?_, ?_, ?_, ?_⟩
   · intro u
     simp [fourK4]
@@ -38,11 +39,13 @@ theorem proved : Targets.Ramsey56.Spec.ValidBound bound := by
   · rintro ⟨f, hinj, hind⟩
     have hmap : Function.Injective (fun i : Fin 6 => (⟨(f i).val / 4, by omega⟩ : Fin 4)) := by
       intro a b hab
-      by_contra hne
-      have hadj := hind a b hne
-      have hfv : f a ≠ f b := fun h => hne (hinj h)
-      have hdiv : (f a).val / 4 = (f b).val / 4 := congrArg Fin.val hab
-      simp [fourK4, hfv, hdiv] at hadj
+      by_cases h : a = b
+      · exact h
+      · exfalso
+        have hadj := hind a b h
+        have hfv : f a ≠ f b := fun heq => h (hinj heq)
+        have hdiv : (f a).val / 4 = (f b).val / 4 := congrArg Fin.val hab
+        simp [fourK4, hfv, hdiv] at hadj
     have hcard := Fintype.card_le_of_injective _ hmap
     simp at hcard
 

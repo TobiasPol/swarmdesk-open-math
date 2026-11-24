@@ -11,6 +11,7 @@ private def logColor (x : Fin 63) : Fin 6 :=
     exact (Nat.log_lt_iff_lt_pow (by decide) (by omega)).2 hlt⟩
 
 theorem proved : Targets.Schur6.Spec.ValidBound bound := by
+  dsimp only [bound]
   refine ⟨logColor, ?_⟩
   intro x y z hsum ⟨hxy, hyz⟩
   have h1 : Nat.log 2 (x.val + 1) = Nat.log 2 (y.val + 1) := congrArg Fin.val hxy
