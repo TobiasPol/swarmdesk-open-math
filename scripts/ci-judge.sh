@@ -102,8 +102,9 @@ if [ "$kind" = "bound" ]; then
   holder_bound="${holder_bound:-$(jq -r '.baseline_value // 0' <<<"$entry")}"
 fi
 
-# Build trusted Specs and verifier cleanly BEFORE compiling untrusted candidate bytes.
-lake build "$spec_mod" sdlean_verify
+# Build trusted Specs, Helpers, and verifier cleanly BEFORE compiling untrusted candidate bytes.
+helpers_mod="${spec_mod%.Spec}.Helpers"
+lake build "$spec_mod" "$helpers_mod" sdlean_verify
 
 olean_rel=".lake/build/lib/lean/${proof_mod//.//}.olean"
 mkdir -p "$(dirname "$olean_rel")"
@@ -116,12 +117,12 @@ if command -v bwrap >/dev/null 2>&1; then
   timeout 600 env -i PATH="$PATH" HOME="$HOME" \
     bwrap --unshare-net --ro-bind / / --dev /dev --proc /proc \
       --bind "$PWD/.lake/build" "$PWD/.lake/build" --tmpfs /tmp \
-      lake env lean -DmaxHeartbeats=400000 -o "$olean_rel" "$file_path" \
+      lake env lean -R . -DmaxHeartbeats=400000 -o "$olean_rel" "$file_path" \
       > "$OUT/lean.log" 2>&1
   build_rc=$?
 else
   timeout 600 env -u GH_TOKEN \
-    lake env lean -DmaxHeartbeats=400000 -o "$olean_rel" "$file_path" \
+    lake env lean -R . -DmaxHeartbeats=400000 -o "$olean_rel" "$file_path" \
     > "$OUT/lean.log" 2>&1
   build_rc=$?
 fi

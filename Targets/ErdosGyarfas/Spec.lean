@@ -9,8 +9,7 @@ def HasPowerOfTwoCycle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=
     ∀ i : Fin (2 ^ k), G.Adj (f i) (f ⟨(i.val + 1) % 2 ^ k, Nat.mod_lt _ (by positivity)⟩)
 
 /-- Every vertex of `G` has degree at least 3. -/
-def MinDegAtLeastThree {n : ℕ} [DecidableRel (SimpleGraph.Adj (V := Fin n))]
-    (G : SimpleGraph (Fin n)) : Prop :=
+def MinDegAtLeastThree {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] : Prop :=
   ∀ v : Fin n, 3 ≤ (Finset.univ.filter (fun u => G.Adj v u)).card
 
 /-- Erdős-Gyárfás Conjecture: every non-empty finite simple graph with min degree ≥ 3 has a 2^k-cycle. -/

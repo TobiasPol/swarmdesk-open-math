@@ -21,28 +21,37 @@ open Lean
 private def allowedAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound]
 
+private partial def collectTransitiveAxiomsLoop
+    (env : Environment) (work : List Name) (seen axioms : NameSet) : NameSet :=
+  match work with
+  | [] => axioms
+  | n :: rest =>
+    if seen.contains n then
+      collectTransitiveAxiomsLoop env rest seen axioms
+    else
+      let seen' := seen.insert n
+      match env.find? n with
+      | none => collectTransitiveAxiomsLoop env rest seen' axioms
+      | some (.axiomInfo _) => collectTransitiveAxiomsLoop env rest seen' (axioms.insert n)
+      | some info =>
+        let deps := info.getUsedConstantsAsSet.toList
+        collectTransitiveAxiomsLoop env (deps ++ rest) seen' axioms
+
 private def collectTransitiveAxioms (env : Environment) (root : Name) : NameSet :=
-  let rec visit (work : List Name) (seen : NameSet) (axioms : NameSet) : NameSet :=
-    match work with
-    | [] => axioms
-    | n :: rest =>
-      if seen.contains n then
-        visit rest seen axioms
-      else
-        let seen' := seen.insert n
-        match env.find? n with
-        | none => visit rest seen' axioms
-        | some (.axiomInfo _) => visit rest seen' (axioms.insert n)
-        | some info =>
-          let deps := info.getUsedConstantsAsSet.toList
-          visit (deps ++ rest) seen' axioms
-  visit [root] {} {}
+  collectTransitiveAxiomsLoop env [root] {} {}
 
 private def checkAxioms (env : Environment) (decl : Name) (allowed : List Name) : Except String Unit := do
   let used := collectTransitiveAxioms env decl
   let bad := used.toList.filter fun a => !allowed.contains a
   if !bad.isEmpty then
     throw s!"unpermitted axioms used by {decl}: {bad}"
+
+private def decodeNatLit : Expr → Option Nat
+  | .lit (.natVal n) => some n
+  | .app (.app (.app (.const ``OfNat.ofNat _) (.const ``Nat _)) (.lit (.natVal n)))
+      (.app (.const ``instOfNatNat _) (.lit (.natVal m))) =>
+    if n == m then some n else none
+  | _ => none
 
 private def extractNatLit (env : Environment) (decl : Name) : Except String Nat := do
   checkAxioms env decl []
@@ -52,9 +61,9 @@ private def extractNatLit (env : Environment) (decl : Name) : Except String Nat 
     throw s!"bound definition {decl} must not be universe-polymorphic"
   let some val := info.value?
     | throw s!"bound definition {decl} has no transparent value"
-  match val with
-  | .lit (.natVal n) => pure n
-  | _ => throw s!"bound definition {decl} must be a concrete Nat literal"
+  match decodeNatLit val with
+  | some n => pure n
+  | none => throw s!"bound definition {decl} must be a concrete Nat literal"
 
 private def checkTypeExact (env : Environment) (decl : Name) (expected : Expr) : Except String Unit := do
   let some info := env.find? decl
@@ -76,10 +85,12 @@ private def replayCandidate (specMod candMod : Name) : IO (Environment × Enviro
   initSearchPath (← findSysroot)
   let specEnv ← importModules #[{ module := specMod }] {} (trustLevel := 0)
   let candEnv ← importModules #[{ module := candMod }] {} (trustLevel := 0)
-  let mut newConsts : NameMap ConstantInfo := {}
-  for (name, info) in candEnv.constants.map₂ do
-    if !specEnv.contains name then
-      newConsts := newConsts.insert name info
+  let mut newConsts : Std.HashMap Name ConstantInfo := {}
+  for i in [:candEnv.header.moduleNames.size] do
+    if (specEnv.getModuleIdx? candEnv.header.moduleNames[i]!).isNone then
+      for info in candEnv.header.moduleData[i]!.constants do
+        if !specEnv.contains info.name then
+          newConsts := newConsts.insert info.name info
   -- Replay all new constants through the Lean kernel inside a fresh environment.
   let replayed ← specEnv.replay newConsts
   pure (specEnv, replayed)

@@ -15,7 +15,9 @@ private lemma embed_inj : Function.Injective embed := by
   intro f g h
   funext i
   have hi := congrFun h i
-  cases hf : f i <;> cases hg : g i <;> simp [embed, boolToZMod3, hf, hg] at hi ⊢
+  cases hf : f i <;> cases hg : g i <;>
+    simp [embed, boolToZMod3, hf, hg] at hi ⊢ <;>
+    exact absurd hi (by decide)
 
 theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
   refine ⟨Finset.univ.image embed, ?_, ?_⟩
@@ -27,13 +29,14 @@ theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
       intro i
       have hi := congrFun hsum i
       cases h1 : fx i <;> cases h2 : fy i <;> cases h3 : fz i <;>
-        simp [embed, boolToZMod3, h1, h2, h3] at hi ⊢
+        simp [embed, boolToZMod3, h1, h2, h3] at hi ⊢ <;>
+        exact absurd hi (by decide)
     constructor
     · funext i
       simp [embed, (hcoord i).1]
     · funext i
       simp [embed, (hcoord i).2]
   · rw [Finset.card_image_of_injective _ embed_inj]
-    simp [bound]
+    simp [bound] <;> decide
 
 end Targets.CapSet8.Proof

@@ -34,8 +34,11 @@ if [ "$candidate" != "$file_path" ]; then
   cp "$candidate" "$file_path"
 fi
 
-lake build "$spec_mod" sdlean_verify >/dev/null
-lake env lean -DmaxHeartbeats=400000 -o ".lake/build/lib/lean/${proof_mod//.//}.olean" "$file_path"
+helpers_mod="${spec_mod%.Spec}.Helpers"
+lake build "$spec_mod" "$helpers_mod" sdlean_verify >/dev/null
+olean=".lake/build/lib/lean/${proof_mod//.//}.olean"
+mkdir -p "$(dirname "$olean")"
+lake env lean -R . -DmaxHeartbeats=400000 -o "$olean" "$file_path"
 verdict=$(lake exe sdlean_verify "$kind" "$spec_mod" "$proof_mod" "$stmt_decl" "$direction" "$holder_bound")
 echo "$verdict"
 [ "$(jq -r .verdict <<<"$verdict")" = "ACCEPTED" ]
