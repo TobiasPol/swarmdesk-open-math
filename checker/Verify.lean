@@ -46,11 +46,16 @@ private def checkAxioms (env : Environment) (decl : Name) (allowed : List Name) 
   if !bad.isEmpty then
     throw s!"unpermitted axioms used by {decl}: {bad}"
 
-private def decodeNatLit : Expr → Option Nat
+private def decodeNatLit (e : Expr) : Option Nat :=
+  match e.consumeMData with
   | .lit (.natVal n) => some n
-  | .app (.app (.app (.const ``OfNat.ofNat _) (.const ``Nat _)) (.lit (.natVal n)))
-      (.app (.const ``instOfNatNat _) (.lit (.natVal m))) =>
-    if n == m then some n else none
+  | .app (.app (.app (.const ``OfNat.ofNat _) (.const ``Nat _)) a) b =>
+    match a.consumeMData, b.consumeMData with
+    | .lit (.natVal n), .app (.const ``instOfNatNat _) c =>
+      match c.consumeMData with
+      | .lit (.natVal m) => if n == m then some n else none
+      | _ => none
+    | _, _ => none
   | _ => none
 
 private def extractNatLit (env : Environment) (decl : Name) : Except String Nat := do
@@ -63,7 +68,7 @@ private def extractNatLit (env : Environment) (decl : Name) : Except String Nat 
     | throw s!"bound definition {decl} has no transparent value"
   match decodeNatLit val with
   | some n => pure n
-  | none => throw s!"bound definition {decl} must be a concrete Nat literal"
+  | none => throw s!"bound definition {decl} must be a concrete Nat literal (got {val})"
 
 private def checkTypeExact (env : Environment) (decl : Name) (expected : Expr) : Except String Unit := do
   let some info := env.find? decl

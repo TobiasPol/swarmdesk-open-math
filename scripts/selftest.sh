@@ -27,7 +27,7 @@ jq -c '.targets[]' targets.json | while IFS= read -r entry; do
   mkdir -p "$(dirname "$olean")"
   lake env lean -R . -DmaxHeartbeats=400000 -o "$olean" "$file_path"
   baseline=$([ "$kind" = "bound" ] && echo 0 || echo 0)
-  verdict=$(lake exe sdlean_verify "$kind" "$spec_mod" "$proof_mod" "$stmt_decl" "$direction" "$baseline")
+  verdict=$(lake exe sdlean_verify "$kind" "$spec_mod" "$proof_mod" "$stmt_decl" "$direction" "$baseline" || true)
   echo "$name: $verdict"
-  [ "$(jq -r .verdict <<<"$verdict")" = "ACCEPTED" ]
+  [ "$(jq -r '.verdict // "MISSING"' <<<"$verdict")" = "ACCEPTED" ]
 done

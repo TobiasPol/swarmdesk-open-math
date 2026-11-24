@@ -39,6 +39,6 @@ lake build "$spec_mod" "$helpers_mod" sdlean_verify >/dev/null
 olean=".lake/build/lib/lean/${proof_mod//.//}.olean"
 mkdir -p "$(dirname "$olean")"
 lake env lean -R . -DmaxHeartbeats=400000 -o "$olean" "$file_path"
-verdict=$(lake exe sdlean_verify "$kind" "$spec_mod" "$proof_mod" "$stmt_decl" "$direction" "$holder_bound")
+verdict=$(lake exe sdlean_verify "$kind" "$spec_mod" "$proof_mod" "$stmt_decl" "$direction" "$holder_bound" || true)
 echo "$verdict"
-[ "$(jq -r .verdict <<<"$verdict")" = "ACCEPTED" ]
+[ "$(jq -r '.verdict // "MISSING"' <<<"$verdict")" = "ACCEPTED" ]
