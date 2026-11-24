@@ -16,8 +16,7 @@ private lemma embed_inj : Function.Injective embed := by
   funext i
   have hi := congrFun h i
   cases hf : f i <;> cases hg : g i <;>
-    simp [embed, boolToZMod3, hf, hg] at hi ⊢ <;>
-    exact absurd hi (by decide)
+    simp [embed, boolToZMod3, hf, hg] at hi ⊢
 
 theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
   dsimp only [bound]
@@ -38,6 +37,6 @@ theorem proved : Targets.CapSet8.Spec.ValidBound bound := by
     · funext i
       simp [embed, (hcoord i).2]
   · rw [Finset.card_image_of_injective _ embed_inj]
-    simp <;> decide
+    simp
 
 end Targets.CapSet8.Proof
