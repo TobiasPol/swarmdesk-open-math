@@ -22,7 +22,7 @@ private def allowedAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound]
 
 private partial def collectTransitiveAxiomsLoop
-    (env : Environment) (work : List Name) (seen axioms : NameSet) : NameSet :=
+    (env : Kernel.Environment) (work : List Name) (seen axioms : NameSet) : NameSet :=
   match work with
   | [] => axioms
   | n :: rest =>
@@ -37,10 +37,10 @@ private partial def collectTransitiveAxiomsLoop
         let deps := info.getUsedConstantsAsSet.toList
         collectTransitiveAxiomsLoop env (deps ++ rest) seen' axioms
 
-private def collectTransitiveAxioms (env : Environment) (root : Name) : NameSet :=
+private def collectTransitiveAxioms (env : Kernel.Environment) (root : Name) : NameSet :=
   collectTransitiveAxiomsLoop env [root] {} {}
 
-private def checkAxioms (env : Environment) (decl : Name) (allowed : List Name) : Except String Unit := do
+private def checkAxioms (env : Kernel.Environment) (decl : Name) (allowed : List Name) : Except String Unit := do
   let used := collectTransitiveAxioms env decl
   let bad := used.toList.filter fun a => !allowed.contains a
   if !bad.isEmpty then
@@ -58,7 +58,7 @@ private def decodeNatLit (e : Expr) : Option Nat :=
     | _, _ => none
   | _ => none
 
-private def extractNatLit (env : Environment) (decl : Name) : Except String Nat := do
+private def extractNatLit (env : Kernel.Environment) (decl : Name) : Except String Nat := do
   checkAxioms env decl []
   let some info := env.find? decl
     | throw s!"missing bound definition {decl}"
@@ -70,7 +70,7 @@ private def extractNatLit (env : Environment) (decl : Name) : Except String Nat 
   | some n => pure n
   | none => throw s!"bound definition {decl} must be a concrete Nat literal (got {val})"
 
-private def checkTypeExact (env : Environment) (decl : Name) (expected : Expr) : Except String Unit := do
+private def checkTypeExact (env : Kernel.Environment) (decl : Name) (expected : Expr) : Except String Unit := do
   let some info := env.find? decl
     | throw s!"missing theorem {decl}"
   if !info.levelParams.isEmpty then
@@ -78,7 +78,7 @@ private def checkTypeExact (env : Environment) (decl : Name) (expected : Expr) :
   if info.type != expected then
     throw s!"type mismatch for {decl}: expected exact kernel term {expected}, got {info.type}"
 
-private def verifySpecPreserved (specEnv candEnv : Environment) (specDecl : Name) : Except String Unit := do
+private def verifySpecPreserved (specEnv candEnv : Kernel.Environment) (specDecl : Name) : Except String Unit := do
   let some sInfo := specEnv.find? specDecl
     | throw s!"trusted Spec missing {specDecl}"
   let some cInfo := candEnv.find? specDecl
@@ -86,7 +86,7 @@ private def verifySpecPreserved (specEnv candEnv : Environment) (specDecl : Name
   if sInfo.type != cInfo.type || sInfo.value? != cInfo.value? then
     throw s!"Spec declaration {specDecl} was altered"
 
-private def replayCandidate (specMod candMod : Name) : IO (Environment × Environment) := do
+private def replayCandidate (specMod candMod : Name) : IO (Kernel.Environment × Kernel.Environment) := do
   initSearchPath (← findSysroot)
   let specEnv ← importModules #[{ module := specMod }] {} (trustLevel := 0)
   let candEnv ← importModules #[{ module := candMod }] {} (trustLevel := 0)
@@ -96,7 +96,7 @@ private def replayCandidate (specMod candMod : Name) : IO (Environment × Enviro
       newConsts := newConsts.insert name info
   -- Replay all new constants through the Lean kernel inside a fresh environment.
   let replayed ← specEnv.replay newConsts
-  pure (specEnv, replayed)
+  pure (specEnv.toKernelEnv, replayed.toKernelEnv)
 
 private def jsonEscape (s : String) : String :=
   s.replace "\\" "\\\\" |>.replace "\"" "\\\"" |>.replace "\n" " "
@@ -126,8 +126,8 @@ def main (args : List String) : IO UInt32 := do
       let notSpec := Expr.app (Expr.const ``Not []) specConst
 
       if kind == "conjecture" then
-        let hasProved := env.contains provedName
-        let hasDisproved := env.contains disprovedName
+        let hasProved := (env.find? provedName).isSome
+        let hasDisproved := (env.find? disprovedName).isSome
         if hasProved && hasDisproved then
           emitVerdict "FAULT" "" "submission proved both Statement and ¬Statement"
           return 1
