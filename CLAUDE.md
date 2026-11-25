@@ -14,7 +14,7 @@ guards, sandboxed Lean compilation, and kernel-replay verification.
 - `node --test checker/*.test.mjs` — run guard, PR guard, and manifest unit tests (instant, no Lean needed)
 - `scripts/setup.sh` — fetch prebuilt Mathlib `.olean` cache and build `Targets` + `sdlean_verify`
 - `scripts/check.sh <target>` — locally guard, compile, and kernel-verify one target
-- `scripts/selftest.sh` — verify all Specs, solved proofs, lemmas, and baseline bounds
+- `scripts/selftest.sh` — verify all Specs, solved proofs, lemmas, and baseline bounds (fails if `lake` is not installed)
 
 ## Rules
 - `Proof.lean` and `Lemmas/*.lean` files are updated on `main` only by the deciding workflow.

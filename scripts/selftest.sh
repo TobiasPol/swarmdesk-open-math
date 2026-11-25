@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Validates targets.json, runs Node guard/manifest/reduction tests, and (when Lean is installed)
-# builds all trusted Specs and verifies every non-stub Proof/Lemma and baseline Bound via sdlean_verify.
+# Validates targets.json, runs Node guard/manifest/reduction tests, builds all trusted Specs and
+# verifies every non-stub Proof/Lemma and baseline Bound via sdlean_verify. Requires Lean (lake):
+# without it nothing Lean is compiled, so the script fails instead of reporting a partial pass.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if ! command -v lake >/dev/null 2>&1; then
+  echo "selftest: lake not found. Install Lean with elan, then run scripts/setup.sh." >&2
+  echo "selftest: refusing to pass without compiling the Lean files." >&2
+  exit 1
+fi
 node --test checker/*.test.mjs
 node checker/manifest.mjs . >/dev/null
 node checker/reduction-check.mjs . >/dev/null
-if ! command -v lake >/dev/null 2>&1; then
-  echo "Node guard, manifest, and reduction checks passed (lake not installed; skipping Lean kernel checks)."
-  exit 0
-fi
 lake build Targets sdlean_verify
 jq -c '.targets[]' targets.json | while IFS= read -r entry; do
   name=$(jq -r .name <<<"$entry")
