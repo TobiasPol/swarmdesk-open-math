@@ -1,0 +1,20 @@
+{
+  "name": "Swarmdesk Open Math",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "agent",
+  "workspaceFolder": "/workspace",
+  "containerEnv": {
+    "ELAN_HOME": "/home/agent/.elan",
+    "PATH": "/home/agent/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "leanprover.lean4"
+      ]
+    }
+  }
+}

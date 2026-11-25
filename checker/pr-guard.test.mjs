@@ -28,24 +28,38 @@ function validFixture(filename = 'Targets/ErdosStraus/Proof.lean', branch = 'ste
 }
 
 describe('pr-guard', () => {
-  it('accepts a valid Proof.lean PR and a valid blueprint Lemma PR', () => {
+  it('accepts valid Proof.lean, bound, and chained blueprint Lemma PRs', () => {
     const f1 = validFixture('Targets/ErdosStraus/Proof.lean', 'step-13');
     const r1 = checkPr(f1.pr, f1.files, f1.tree, f1.commits, MANIFEST, REPO, 'main');
     assert.equal(r1.target, 'erdos_straus');
     assert.equal(r1.kind, 'conjecture');
     assert.equal(r1.step, 13);
 
-    const f2 = validFixture('Targets/ErdosStraus/Lemmas/EvenCase.lean', 'step-25');
+    const f2 = validFixture('Targets/ErdosStraus/Lemmas/Mod12Eq11.lean', 'step-25');
     const r2 = checkPr(f2.pr, f2.files, f2.tree, f2.commits, MANIFEST, REPO, 'main');
-    assert.equal(r2.target, 'erdos_straus_even');
+    assert.equal(r2.target, 'erdos_straus_mod_12_eq_11');
     assert.equal(r2.kind, 'lemma');
     assert.equal(r2.step, 25);
+
+    const f3 = validFixture('Targets/FranklDensity/Proof.lean', 'step-31');
+    const r3 = checkPr(f3.pr, f3.files, f3.tree, f3.commits, MANIFEST, REPO, 'main');
+    assert.equal(r3.target, 'frankl_density_bound');
+    assert.equal(r3.kind, 'bound');
+    assert.equal(r3.step, 31);
+
+    const f4 = validFixture('Targets/Erdos7OddCovering/Lemmas/DistinctModuliGe3.lean', 'step-32');
+    const r4 = checkPr(f4.pr, f4.files, f4.tree, f4.commits, MANIFEST, REPO, 'main');
+    assert.equal(r4.target, 'erdos_7_distinct_moduli_ge_3');
+    assert.equal(r4.kind, 'lemma');
   });
 
-  it('refuses editing Spec.lean, Helpers.lean, targets.json, symlinks, or bad branches', () => {
+  it('refuses editing Spec.lean, Helpers.lean, CertKit, targets.json, symlinks, or bad branches', () => {
     for (const badFile of [
       'Targets/ErdosStraus/Spec.lean',
       'Targets/ErdosStraus/Helpers.lean',
+      'Targets/FranklDensity/Spec.lean',
+      'Targets/FranklDensity/Helpers.lean',
+      'Targets/CertKit/Lrat.lean',
       'targets.json',
       'checker/Verify.lean',
     ]) {
@@ -59,6 +73,20 @@ describe('pr-guard', () => {
     const badBranch = validFixture('Targets/ErdosStraus/Proof.lean', 'feature-proof');
     assert.throws(() =>
       checkPr(badBranch.pr, badBranch.files, badBranch.tree, badBranch.commits, MANIFEST, REPO, 'main'),
+    );
+
+    const badCommitMsg = validFixture('Targets/FranklDensity/Proof.lean', 'step-31');
+    badCommitMsg.commits[0].commit.message = 'wrong message';
+    assert.throws(() =>
+      checkPr(
+        badCommitMsg.pr,
+        badCommitMsg.files,
+        badCommitMsg.tree,
+        badCommitMsg.commits,
+        MANIFEST,
+        REPO,
+        'main',
+      ),
     );
   });
 

@@ -7,6 +7,7 @@ on:
       - "targets.json"
       - "Targets/**/Spec.lean"
       - "Targets/**/Helpers.lean"
+      - "Targets/CertKit/*.lean"
       - "Targets.lean"
 
 permissions:
@@ -19,10 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate manifest and guard tests
+      - name: Validate manifest, DAG, reduction checks, and guard tests
         run: |
           node --test checker/*.test.mjs
           node checker/manifest.mjs .
+          node checker/reduction-check.mjs .
 
       - name: Install elan and verify all Specs compile cleanly
         run: |

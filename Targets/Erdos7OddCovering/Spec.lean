@@ -26,4 +26,8 @@ def LemmaLcmReduction : Prop :=
     (∀ x : ℤ, ∃ p ∈ S, x ≡ p.1 [ZMOD (p.2 : ℤ)]) ↔
     (∀ r : ℕ, r < S.lcm Prod.snd → ∃ p ∈ S, (r : ℤ) ≡ p.1 [ZMOD (p.2 : ℤ)])
 
+/-- Blueprint Lemma 3: Any odd distinct covering system must contain at least 3 congruences. -/
+def LemmaDistinctModuliGe3 : Prop :=
+  ∀ S : Finset (ℤ × ℕ), IsOddDistinctCovering S → 3 ≤ S.card
+
 end Targets.Erdos7OddCovering.Spec

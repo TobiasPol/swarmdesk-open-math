@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fast, zero-dependency syntax and anti-injection guard for submitted Lean 4 proof files.
 // Runs BEFORE Mathlib is downloaded or Lean is invoked so spam, prompt injections, sorry stubs,
-// and metaprogramming exploits fail in milliseconds.
+// global environment/Helpers.lean pollution, and metaprogramming exploits fail in milliseconds.
 //
 //   node checker/guard.mjs <file.lean>
 //
@@ -21,6 +21,7 @@ const FORBIDDEN_KEYWORDS = new Set([
   'unsafe',
   'partial',
   'native_decide',
+  'decide_cbv',
   'macro',
   'macro_rules',
   'elab',
@@ -37,13 +38,22 @@ const FORBIDDEN_KEYWORDS = new Set([
   'extern',
   'csimp',
   'env_extension',
+  'notation',
+  'infix',
+  'infixl',
+  'infixr',
+  'prefix',
+  'postfix',
+  'export',
 ]);
 
 const FORBIDDEN_HASH_COMMANDS = /^#(eval|print|check|reduce|synth|guard|exit|align|help)\b/;
 const FORBIDDEN_IMPORT_RE =
   /^\s*import\s+(Lean|Lake|Init\.System|Std\.Internal\.IO|Mathlib\.Tactic\.RunCmd)\b/m;
 const FORBIDDEN_ATTR_RE =
-  /@\[[^\]]*\b(extern|implemented_by|csimp|macro|elab|builtin_macro|builtin_elab|init|export)\b/;
+  /(?:@|\battribute\s+)\[[^\]]*\b(extern|implemented_by|csimp|macro|elab|builtin_macro|builtin_elab|init|export|simp|instance|ext|reducible|coe)\b/;
+const FORBIDDEN_GLOBAL_INSTANCE_RE =
+  /^\s*(?:(?:private|protected|scoped)\s+)*instance\b/m;
 const CONTROL_CHAR_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/;
 
 export function guardLeanSource(source, { allowSorry = false } = {}) {
@@ -74,7 +84,13 @@ export function guardLeanSource(source, { allowSorry = false } = {}) {
     return { ok: false, refused: 'importing Lean compiler, Lake, or system IO modules is not allowed' };
   }
   if (FORBIDDEN_ATTR_RE.test(source)) {
-    return { ok: false, refused: 'compiler/FFI/metaprogramming attributes (@[extern], @[implemented_by], etc.) are not allowed' };
+    return {
+      ok: false,
+      refused: 'compiler/FFI/global environment attributes (@[simp], @[instance], @[ext], @[reducible], @[coe], @[extern], etc.) are not allowed',
+    };
+  }
+  if (FORBIDDEN_GLOBAL_INSTANCE_RE.test(source)) {
+    return { ok: false, refused: 'global typeclass instance declarations are not allowed' };
   }
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();

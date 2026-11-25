@@ -158,6 +158,24 @@
       "approach": "No fixed approach. Any kernel-verified Lean 4 witness strictly beating the current bound."
     },
     {
+      "name": "frankl_density_bound",
+      "title": "Frankl union-closed frequency bound",
+      "summary": "Prove a tighter universal lower bound P/100000 on maximum element frequency in finite union-closed families.",
+      "kind": "bound",
+      "domain": "Combinatorics",
+      "source_url": "https://en.wikipedia.org/wiki/Union-closed_sets_conjecture",
+      "direction": "maximize",
+      "baseline_value": 20000,
+      "sota_value": 38234,
+      "metric_unit": "1e-5",
+      "dir": "Targets/FranklDensity",
+      "spec_module": "Targets.FranklDensity.Spec",
+      "proof_module": "Targets.FranklDensity.Proof",
+      "file_path": "Targets/FranklDensity/Proof.lean",
+      "statement_decl": "Targets.FranklDensity.Spec.ValidBound",
+      "approach": "No fixed approach. Any kernel-verified Lean 4 proof of Spec.ValidBound P strictly beating the current bound."
+    },
+    {
       "name": "erdos_7_density_ge_one",
       "title": "Lemma: Covering reciprocal sum >= 1",
       "summary": "In any finite covering system of Z, the sum of reciprocals 1/m_i of the moduli is at least 1.",
@@ -185,6 +203,25 @@
       "proof_module": "Targets.Erdos7OddCovering.Lemmas.LcmReduction",
       "file_path": "Targets/Erdos7OddCovering/Lemmas/LcmReduction.lean",
       "statement_decl": "Targets.Erdos7OddCovering.Spec.LemmaLcmReduction",
+      "approach": "No fixed approach. Any kernel-verified Lean 4 proof of this blueprint helper lemma."
+    },
+    {
+      "name": "erdos_7_distinct_moduli_ge_3",
+      "title": "Lemma: Odd distinct covering has >= 3 moduli",
+      "summary": "Any finite odd distinct covering system of Z contains at least 3 congruences.",
+      "kind": "lemma",
+      "parent": "erdos_7_odd_covering",
+      "depends_on": [
+        "erdos_7_density_ge_one",
+        "erdos_7_lcm_reduction"
+      ],
+      "domain": "Number Theory",
+      "source_url": "https://www.erdosproblems.com/7",
+      "dir": "Targets/Erdos7OddCovering",
+      "spec_module": "Targets.Erdos7OddCovering.Spec",
+      "proof_module": "Targets.Erdos7OddCovering.Lemmas.DistinctModuliGe3",
+      "file_path": "Targets/Erdos7OddCovering/Lemmas/DistinctModuliGe3.lean",
+      "statement_decl": "Targets.Erdos7OddCovering.Spec.LemmaDistinctModuliGe3",
       "approach": "No fixed approach. Any kernel-verified Lean 4 proof of this blueprint helper lemma."
     },
     {
@@ -275,6 +312,25 @@
       "proof_module": "Targets.ErdosStraus.Lemmas.Mod4Eq3",
       "file_path": "Targets/ErdosStraus/Lemmas/Mod4Eq3.lean",
       "statement_decl": "Targets.ErdosStraus.Spec.LemmaMod4Eq3",
+      "approach": "No fixed approach. Any kernel-verified Lean 4 proof of this blueprint helper lemma."
+    },
+    {
+      "name": "erdos_straus_mod_12_eq_11",
+      "title": "Lemma: Erdős-Straus for n = 11 (mod 12)",
+      "summary": "For every integer n >= 2 with n % 12 = 11, 4/n can be written as 1/x + 1/y + 1/z with positive integers x, y, z.",
+      "kind": "lemma",
+      "parent": "erdos_straus",
+      "depends_on": [
+        "erdos_straus_even",
+        "erdos_straus_mod_4_eq_3"
+      ],
+      "domain": "Number Theory",
+      "source_url": "https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93Straus_conjecture",
+      "dir": "Targets/ErdosStraus",
+      "spec_module": "Targets.ErdosStraus.Spec",
+      "proof_module": "Targets.ErdosStraus.Lemmas.Mod12Eq11",
+      "file_path": "Targets/ErdosStraus/Lemmas/Mod12Eq11.lean",
+      "statement_decl": "Targets.ErdosStraus.Spec.LemmaMod12Eq11",
       "approach": "No fixed approach. Any kernel-verified Lean 4 proof of this blueprint helper lemma."
     },
     {

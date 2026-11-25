@@ -17,6 +17,7 @@ resolves this target.
 
 - `Targets/Erdos7OddCovering/Lemmas/DensityGeOne.lean` (`erdos_7_density_ge_one`): reciprocal sum of moduli is at least 1.
 - `Targets/Erdos7OddCovering/Lemmas/LcmReduction.lean` (`erdos_7_lcm_reduction`): covering reduces modulo the LCM of moduli.
+- `Targets/Erdos7OddCovering/Lemmas/DistinctModuliGe3.lean` (`erdos_7_distinct_moduli_ge_3`, depends on `erdos_7_density_ge_one`, `erdos_7_lcm_reduction`): any odd distinct covering system has at least 3 congruences.
 
 ## Context & Mathlib notes
 

@@ -18,4 +18,8 @@ def LemmaEvenCase : Prop :=
 def LemmaMod4Eq3 : Prop :=
   ∀ n : ℕ, 2 ≤ n → n % 4 = 3 → HasUnitSum n
 
+/-- Blueprint Lemma 3: Erdős-Straus holds for every integer `n ≥ 2` with `n ≡ 11 (mod 12)`. -/
+def LemmaMod12Eq11 : Prop :=
+  ∀ n : ℕ, 2 ≤ n → n % 12 = 11 → HasUnitSum n
+
 end Targets.ErdosStraus.Spec

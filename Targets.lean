@@ -18,3 +18,6 @@ import Targets.CapSet8.Spec
 import Targets.CapSet8.Helpers
 import Targets.Vdw35.Spec
 import Targets.Vdw35.Helpers
+import Targets.FranklDensity.Spec
+import Targets.FranklDensity.Helpers
+import Targets.CertKit.Lrat

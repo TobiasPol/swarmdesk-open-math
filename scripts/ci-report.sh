@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # Report job for swarmdesk-open-math: never executes submitted Lean code.
 # On ACCEPTED, commits the exact judged bytes by SHA-1 hash onto main (and for blueprint lemmas,
-# adds its `import` line to Helpers.lean in the same workflow commit), closes the PR, comments,
-# and sends the HMAC-signed verdict to Swarmdesk.
+# safely adds its `import` line to Helpers.lean above `namespace` in the same workflow commit),
+# closes the PR, comments, and sends the HMAC-signed verdict (including reason_code) to Swarmdesk.
 set -euo pipefail
 : "${PR:?}" "${REPO:?}" "${GH_TOKEN:?}" "${DEFAULT_BRANCH:?}"
 file="${1:?usage: ci-report.sh <final.json>}"
 here=$(cd "$(dirname "$0")" && pwd)
 PROBLEM="${PROBLEM:-open-math}"
 printf '%s' "$PR" | grep -Eqx '[1-9][0-9]{0,6}' || { echo "bad pull request number"; exit 1; }
-[ -s "$file" ] || { mkdir -p "$(dirname "$file")"; echo '{"verdict":"FAULT","reason":"the check produced no verdict"}' > "$file"; }
+[ -s "$file" ] || { mkdir -p "$(dirname "$file")"; echo '{"verdict":"FAULT","reason":"the check produced no verdict","reason_code":"fault"}' > "$file"; }
 
 field() { jq -r --arg k "$1" '.[$k] // "" | tostring' "$file"; }
 pick() { field "$1" | grep -Ex "$2" || true; }
 verdict=$(pick verdict 'ACCEPTED|REJECTED|FAULT')
 verdict=${verdict:-FAULT}
 reason=$(field reason | tr -cd '[:alnum:] .,:()<>_/`-' | cut -c1-200)
+reason_code=$(pick reason_code 'wrong_answer|margin_too_small|timeout|out_of_fuel|trapped|compile_error|guard_rejected|axiom_violation|type_mismatch|bound_not_improved|spec_altered|stale|fault|other|')
 head=$(pick head_sha '[0-9a-f]{40}')
 target=$(pick target '[a-z0-9_]{3,48}')
 kind=$(pick kind 'conjecture|bound|lemma')
@@ -38,8 +39,34 @@ record_sha=""
 api() { gh api -H "X-GitHub-Api-Version: 2022-11-28" "$@"; }
 blob_at() { api "repos/$REPO/contents/$2?ref=$1" --jq .sha 2>/dev/null; }
 
+inject_helpers_import() {
+  local raw="$1"
+  local mod="$2"
+  local mod_re="${mod//./\\.}"
+  raw="${raw//$'\r'/}"
+  if printf '%s\n' "$raw" | grep -Eq "^[[:space:]]*import[[:space:]]+${mod_re}[[:space:]]*$"; then
+    return 1
+  fi
+  awk -v imp="import $mod" '
+    { lines[NR] = $0 }
+    /^[[:space:]]*import[[:space:]]/ && !seen_ns { last_imp = NR }
+    /^[[:space:]]*namespace[[:space:]]/ { seen_ns = 1 }
+    END {
+      if (last_imp > 0) {
+        for (i = 1; i <= NR; i++) {
+          print lines[i]
+          if (i == last_imp) print imp
+        }
+      } else {
+        print imp
+        for (i = 1; i <= NR; i++) print lines[i]
+      }
+    }
+  ' <<<"$raw"
+}
+
 write_record() {
-  local main now last blob tree new commit message tree_items helpers_path helpers_raw helpers_blob
+  local main now last blob tree new commit message tree_items helpers_path helpers_raw updated_helpers helpers_blob
   message="step-$step: verified Lean $kind $target ($resolution) by $author"$'\n\n'
   if [ "$kind" = "bound" ]; then
     message+="Verified bound $metric_val (previous: $holder_val). Lines: ${proof_lines:-0}."$'\n'
@@ -66,13 +93,12 @@ write_record() {
     tree_items=$(jq -cn --arg path "$file_path" --arg sha "$blob" \
       '[{path: $path, mode: "100644", type: "blob", sha: $sha}]')
 
-    # For V2 blueprint helper lemmas, automatically re-export the proved lemma in Helpers.lean.
+    # For V2 blueprint helper lemmas, safely re-export the proved lemma in Helpers.lean above namespace.
     if [ "$kind" = "lemma" ] && [ -n "$proof_mod" ]; then
       helpers_path="$(dirname "$(dirname "$file_path")")/Helpers.lean"
       helpers_raw=$(api "repos/$REPO/contents/$helpers_path?ref=$main" --jq '.content' | tr -d '\n' | base64 -d) || return 2
-      if ! grep -Fqx "import $proof_mod" <<<"$helpers_raw"; then
-        updated_helpers=$(printf 'import %s\n%s\n' "$proof_mod" "$helpers_raw")
-        helpers_blob=$(jq -n --arg content "$updated_helpers" '{content: $content, encoding: "utf-8"}' \
+      if updated_helpers=$(inject_helpers_import "$helpers_raw" "$proof_mod"); then
+        helpers_blob=$(jq -n --arg content "${updated_helpers}"$'\n' '{content: $content, encoding: "utf-8"}' \
           | api -X POST "repos/$REPO/git/blobs" --input - --jq .sha) || return 2
         tree_items=$(jq -cn --argjson cur "$tree_items" --arg path "$helpers_path" --arg sha "$helpers_blob" \
           '$cur + [{path: $path, mode: "100644", type: "blob", sha: $sha}]')
@@ -96,6 +122,7 @@ write_record() {
 }
 
 if [ "$verdict" = ACCEPTED ] && [ -n "$head" ] && [ -n "$target" ] && [ -n "$file_path" ] && [ -n "$step" ] && [ -n "$author" ]; then
+  reason_code=""
   outcome=2
   if [ -n "$candidate_blob" ] && [ -n "$holder_blob" ] && [ -s "$bytes" ]; then
     write_record && outcome=0 || outcome=$?
@@ -105,10 +132,12 @@ if [ "$verdict" = ACCEPTED ] && [ -n "$head" ] && [ -n "$target" ] && [ -n "$fil
     1)
       verdict=STALE
       reason="this target moved while your proof was checked"
+      reason_code="stale"
       ;;
     *)
       verdict=FAULT
       reason="the verified proof could not be written to main"
+      reason_code="fault"
       ;;
   esac
 fi
@@ -134,11 +163,12 @@ if [ -n "${SWARMDESK_URL:-}" ] && [ -n "${VERDICT_SECRET:-}" ] && [ -n "$author"
   payload=$(mktemp)
   jq -cn --arg problem "$PROBLEM" --argjson pr "$PR" --arg head_sha "$head" --arg author "$author" \
     --arg step "$step" --arg target "$target" --arg verdict "$verdict" --arg reason "$reason" \
-    --arg resolution "$resolution" --argjson metric "$metric_val" --argjson holder "$holder_val" \
+    --arg reason_code "$reason_code" --arg resolution "$resolution" \
+    --argjson metric "$metric_val" --argjson holder "$holder_val" \
     --arg lines "${proof_lines:-0}" --argjson merged "$merged" --arg run_url "$run_url" \
     '{problem: $problem, pr: $pr, head_sha: $head_sha, author: $author, step: ($step | tonumber? // null),
-      target: $target, verdict: $verdict, reason: $reason, resolution: $resolution,
-      metric_value: $metric, holder_value: $holder, proof_lines: ($lines | tonumber? // 0),
-      merged: $merged, run_url: $run_url}' > "$payload"
+      target: $target, verdict: $verdict, reason: $reason, reason_code: $reason_code,
+      resolution: $resolution, metric_value: $metric, holder_value: $holder,
+      proof_lines: ($lines | tonumber? // 0), merged: $merged, run_url: $run_url}' > "$payload"
   "$here/send-verdict.sh" "$payload"
 fi

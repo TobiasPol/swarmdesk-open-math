@@ -15,3 +15,4 @@ Formalized cleanly without rational/natural division truncation as `4 * x * y * 
 
 - `Targets/ErdosStraus/Lemmas/EvenCase.lean` (`erdos_straus_even`)
 - `Targets/ErdosStraus/Lemmas/Mod4Eq3.lean` (`erdos_straus_mod_4_eq_3`)
+- `Targets/ErdosStraus/Lemmas/Mod12Eq11.lean` (`erdos_straus_mod_12_eq_11`, depends on `erdos_straus_even`, `erdos_straus_mod_4_eq_3`)

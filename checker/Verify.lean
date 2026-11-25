@@ -14,6 +14,8 @@ Inspired by Lean's `lean4checker` and `SafeVerify`:
      literal strictly improving on `holderBound`, plus `theorem proved : Spec.ValidBound bound`.
 4. Audits transitive axioms of the target theorem to be a subset of
    `{propext, Classical.choice, Quot.sound}`.
+5. Emits structured `reason_code` (`""`, `"axiom_violation"`, `"type_mismatch"`,
+   `"bound_not_improved"`, `"spec_altered"`, `"fault"`) in JSON verdicts.
 -/
 
 open Lean
@@ -40,11 +42,12 @@ private partial def collectTransitiveAxiomsLoop
 private def collectTransitiveAxioms (env : Kernel.Environment) (root : Name) : NameSet :=
   collectTransitiveAxiomsLoop env [root] {} {}
 
-private def checkAxioms (env : Kernel.Environment) (decl : Name) (allowed : List Name) : Except String Unit := do
+private def checkAxioms (env : Kernel.Environment) (decl : Name) (allowed : List Name) :
+    Except (String × String) Unit := do
   let used := collectTransitiveAxioms env decl
   let bad := used.toList.filter fun a => !allowed.contains a
   if !bad.isEmpty then
-    throw s!"unpermitted axioms used by {decl}: {bad}"
+    throw ("axiom_violation", s!"unpermitted axioms used by {decl}: {bad}")
 
 private def decodeNatLit (e : Expr) : Option Nat :=
   match e.consumeMData with
@@ -58,33 +61,36 @@ private def decodeNatLit (e : Expr) : Option Nat :=
     | _, _ => none
   | _ => none
 
-private def extractNatLit (env : Kernel.Environment) (decl : Name) : Except String Nat := do
+private def extractNatLit (env : Kernel.Environment) (decl : Name) :
+    Except (String × String) Nat := do
   checkAxioms env decl []
   let some info := env.find? decl
-    | throw s!"missing bound definition {decl}"
+    | throw ("type_mismatch", s!"missing bound definition {decl}")
   if !info.levelParams.isEmpty then
-    throw s!"bound definition {decl} must not be universe-polymorphic"
+    throw ("type_mismatch", s!"bound definition {decl} must not be universe-polymorphic")
   let some val := info.value?
-    | throw s!"bound definition {decl} has no transparent value"
+    | throw ("type_mismatch", s!"bound definition {decl} has no transparent value")
   match decodeNatLit val with
   | some n => pure n
-  | none => throw s!"bound definition {decl} must be a concrete Nat literal (got {val})"
+  | none => throw ("type_mismatch", s!"bound definition {decl} must be a concrete Nat literal (got {val})")
 
-private def checkTypeExact (env : Kernel.Environment) (decl : Name) (expected : Expr) : Except String Unit := do
+private def checkTypeExact (env : Kernel.Environment) (decl : Name) (expected : Expr) :
+    Except (String × String) Unit := do
   let some info := env.find? decl
-    | throw s!"missing theorem {decl}"
+    | throw ("type_mismatch", s!"missing theorem {decl}")
   if !info.levelParams.isEmpty then
-    throw s!"theorem {decl} must not be universe-polymorphic"
+    throw ("type_mismatch", s!"theorem {decl} must not be universe-polymorphic")
   if info.type != expected then
-    throw s!"type mismatch for {decl}: expected exact kernel term {expected}, got {info.type}"
+    throw ("type_mismatch", s!"type mismatch for {decl}: expected exact kernel term {expected}, got {info.type}")
 
-private def verifySpecPreserved (specEnv candEnv : Kernel.Environment) (specDecl : Name) : Except String Unit := do
+private def verifySpecPreserved (specEnv candEnv : Kernel.Environment) (specDecl : Name) :
+    Except (String × String) Unit := do
   let some sInfo := specEnv.find? specDecl
-    | throw s!"trusted Spec missing {specDecl}"
+    | throw ("spec_altered", s!"trusted Spec missing {specDecl}")
   let some cInfo := candEnv.find? specDecl
-    | throw s!"candidate environment missing {specDecl}"
+    | throw ("spec_altered", s!"candidate environment missing {specDecl}")
   if sInfo.type != cInfo.type || sInfo.value? != cInfo.value? then
-    throw s!"Spec declaration {specDecl} was altered"
+    throw ("spec_altered", s!"Spec declaration {specDecl} was altered")
 
 private def replayCandidate (specMod candMod : Name) : IO (Kernel.Environment × Kernel.Environment) := do
   initSearchPath (← findSysroot)
@@ -101,10 +107,11 @@ private def replayCandidate (specMod candMod : Name) : IO (Kernel.Environment ×
 private def jsonEscape (s : String) : String :=
   s.replace "\\" "\\\\" |>.replace "\"" "\\\"" |>.replace "\n" " "
 
-private def emitVerdict (verdict resolution reason : String) (metric holder : Option Nat := none) : IO Unit := do
+private def emitVerdict (verdict resolution reason : String)
+    (metric holder : Option Nat := none) (reasonCode : String := "") : IO Unit := do
   let mStr := match metric with | some n => s!"{n}" | none => "null"
   let hStr := match holder with | some n => s!"{n}" | none => "null"
-  IO.println s!"\{\"verdict\":\"{verdict}\",\"resolution\":\"{resolution}\",\"reason\":\"{jsonEscape reason}\",\"metric_value\":{mStr},\"holder_value\":{hStr}}"
+  IO.println s!"\{\"verdict\":\"{verdict}\",\"resolution\":\"{resolution}\",\"reason\":\"{jsonEscape reason}\",\"reason_code\":\"{jsonEscape reasonCode}\",\"metric_value\":{mStr},\"holder_value\":{hStr}}"
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -115,8 +122,8 @@ def main (args : List String) : IO UInt32 := do
     try
       let (specEnv, env) ← replayCandidate specMod candMod
       match verifySpecPreserved specEnv env specDecl with
-      | .error msg =>
-        emitVerdict "REJECTED" "" msg
+      | .error (code, msg) =>
+        emitVerdict "REJECTED" "" msg none none code
         return 1
       | .ok () => pure ()
 
@@ -129,29 +136,29 @@ def main (args : List String) : IO UInt32 := do
         let hasProved := (env.find? provedName).isSome
         let hasDisproved := (env.find? disprovedName).isSome
         if hasProved && hasDisproved then
-          emitVerdict "FAULT" "" "submission proved both Statement and ¬Statement"
+          emitVerdict "FAULT" "" "submission proved both Statement and ¬Statement" none none "fault"
           return 1
         if hasProved then
           match checkTypeExact env provedName specConst *> checkAxioms env provedName allowedAxioms with
           | .ok () => emitVerdict "ACCEPTED" "proved" ""; return 0
-          | .error msg => emitVerdict "REJECTED" "" msg; return 1
+          | .error (code, msg) => emitVerdict "REJECTED" "" msg none none code; return 1
         else if hasDisproved then
           match checkTypeExact env disprovedName notSpec *> checkAxioms env disprovedName allowedAxioms with
           | .ok () => emitVerdict "ACCEPTED" "disproved" ""; return 0
-          | .error msg => emitVerdict "REJECTED" "" msg; return 1
+          | .error (code, msg) => emitVerdict "REJECTED" "" msg none none code; return 1
         else
-          emitVerdict "REJECTED" "" s!"must define {provedName} or {disprovedName}"
+          emitVerdict "REJECTED" "" s!"must define {provedName} or {disprovedName}" none none "type_mismatch"
           return 1
       else if kind == "lemma" then
         match checkTypeExact env provedName specConst *> checkAxioms env provedName allowedAxioms with
         | .ok () => emitVerdict "ACCEPTED" "proved" ""; return 0
-        | .error msg => emitVerdict "REJECTED" "" msg; return 1
+        | .error (code, msg) => emitVerdict "REJECTED" "" msg none none code; return 1
       else if kind == "bound" then
         let boundName := candMod ++ `bound
         let some holderVal := holderBoundStr.toNat?
-          | do emitVerdict "FAULT" "" s!"invalid holder bound {holderBoundStr}"; return 1
+          | do emitVerdict "FAULT" "" s!"invalid holder bound {holderBoundStr}" none none "fault"; return 1
         match extractNatLit env boundName with
-        | .error msg => emitVerdict "REJECTED" "" msg; return 1
+        | .error (code, msg) => emitVerdict "REJECTED" "" msg none none code; return 1
         | .ok candVal =>
           let expected := Expr.app specConst (Expr.const boundName [])
           let expectedLit := Expr.app specConst (Expr.lit (.natVal candVal))
@@ -160,19 +167,19 @@ def main (args : List String) : IO UInt32 := do
             | .ok () => .ok ()
             | .error _ => checkTypeExact env provedName expectedLit
           match typeOk *> checkAxioms env provedName allowedAxioms with
-          | .error msg => emitVerdict "REJECTED" "" msg (some candVal) (some holderVal); return 1
+          | .error (code, msg) => emitVerdict "REJECTED" "" msg (some candVal) (some holderVal) code; return 1
           | .ok () =>
             let better := if direction == "minimize" then candVal < holderVal else candVal > holderVal
             if !better then
-              emitVerdict "REJECTED" "" s!"bound {candVal} does not improve on current holder {holderVal}" (some candVal) (some holderVal)
+              emitVerdict "REJECTED" "" s!"bound {candVal} does not improve on current holder {holderVal}" (some candVal) (some holderVal) "bound_not_improved"
               return 1
             emitVerdict "ACCEPTED" "improved" "" (some candVal) (some holderVal)
             return 0
       else
-        emitVerdict "FAULT" "" s!"unknown target kind {kind}"
+        emitVerdict "FAULT" "" s!"unknown target kind {kind}" none none "fault"
         return 1
     catch e =>
-      emitVerdict "REJECTED" "" s!"kernel replay error: {e}"
+      emitVerdict "REJECTED" "" s!"kernel replay error: {e}" none none "fault"
       return 1
   | _ =>
     IO.eprintln "usage: sdlean_verify <kind> <SpecModule> <CandModule> <SpecDecl> <direction> <holderBound>"

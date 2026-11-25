@@ -5,20 +5,24 @@ trusting the contributor or AI agent who submitted the Lean file.
 
 ## Layered defense
 
-1. **`checker/pr-guard.mjs`**: reads the pull request purely via GitHub's API (the fork is never
-   checked out) and enforces a single modified Lean target file on branch `step-<n>` with one commit.
+1. **`checker/pr-guard.mjs` & `checker/manifest.mjs`**: reads the pull request purely via GitHub's
+   API (the fork is never checked out) and enforces a single modified Lean target file on branch
+   `step-<n>` with one commit. `manifest.mjs` and `reduction-check.mjs` validate the multi-level
+   lemma DAG (`parent` and `depends_on` with DFS cycle detection) and verify all trusted `Spec.lean`,
+   `Helpers.lean`, and `CertKit/*.lean` files contain no `sorry`/`admit`/`axiom`.
 2. **`checker/guard.mjs`**: lexes the raw file bytes in milliseconds before Mathlib is even
    downloaded. It rejects comments, string literals, `«...»` guillemet identifiers (closing
-   prompt-injection vectors), plus `sorry`, `admit`, `axiom`, `opaque`, `unsafe`, `partial`,
-   `native_decide`, `macro`, `elab`, `syntax`, `initialize`, `#eval`, `run_cmd`, `@[extern]`,
-   `@[implemented_by]`, `@[csimp]`, `set_option`, and `import Lean` / `import Lake`.
+   prompt-injection vectors), global environment/`Helpers.lean` pollution (`@[simp]`,
+   `@[instance]`, `@[ext]`, `@[reducible]`, `@[coe]`, `attribute [...]`, `notation`, `infix*`,
+   `prefix`, `postfix`, `export`, `decide_cbv`), plus `sorry`, `admit`, `axiom`, `opaque`, `unsafe`,
+   `partial`, `native_decide`, `macro`, `elab`, `syntax`, `initialize`, `#eval`, `run_cmd`,
+   `@[extern]`, `@[implemented_by]`, `@[csimp]`, `set_option`, and `import Lean` / `import Lake`.
 3. **Networkless sandboxed compilation (`scripts/ci-judge.sh`)**: inside the zero-secret `judge`
    job, Lean compiles the single submission file inside a `--network=none`, `--read-only`,
-   memory- and time-capped container (or `bwrap` sandbox) with read-only Mathlib and trusted
-   `Spec.olean`. Even if a novel elaborator bug executed code at compile time, it has no network,
-   no credentials, and no write access outside a scratch temp directory.
+   memory- and time-capped `bwrap` sandbox with `ulimit -v 6291456` (6 GiB), `-DmaxHeartbeats=400000`,
+   `-DmaxRecDepth=2000`, read-only Mathlib, and trusted `Spec.olean`.
 4. **Independent kernel replay (`checker/Verify.lean`)**: runs in a fresh trusted process *outside*
-   the untrusted elaboration step:
+   the untrusted elaboration step (also capped at 6 GiB via `ulimit -v 6291456`):
    - Replays every new declaration from the compiled `.olean` through the Lean 4 C++ kernel via
      `Environment.replay` (preventing metaprogramming `addDeclWithoutChecking` exploits).
    - Verifies that the trusted `Spec` constants match the prebuilt `Spec.olean`.
@@ -31,10 +35,17 @@ trusting the contributor or AI agent who submitted the Lean file.
      `main`, plus `theorem proved : Targets.<Dir>.Spec.ValidBound bound`.
    - For `lemma` targets: requires exact kernel `Expr` identity to `Targets.<Dir>.Spec.Lemma<Name>`.
    - Audits all transitive axioms of `proved`/`disproved` and rejects anything outside
-     `{propext, Classical.choice, Quot.sound}` (catching `sorryAx`, `Lean.ofReduceBool`,
-     `Lean.trustCompiler`, and custom axioms).
-5. **Exact judged-bytes commit (`scripts/ci-report.sh`)**: the `report` job never runs Lean. It
-   verifies `main` still holds the exact base file hash, commits the exact judged bytes by SHA-1
-   blob hash as a workflow-authored commit, moves `main` without force (preventing three-way merge
-   hybrid files and turning concurrent second winners into `STALE`), closes the PR, and posts an
-   HMAC-signed verdict to Swarmdesk.
+     `{propext, Classical.choice, Quot.sound}`.
+   - Emits a structured allowlisted `reason_code` (`""`, `axiom_violation`, `type_mismatch`,
+     `bound_not_improved`, `spec_altered`, `fault`, plus `guard_rejected`, `compile_error`, `timeout`
+     from `ci-judge.sh`).
+5. **Zero-Axiom SAT Certification (`Targets/CertKit/Lrat.lean`)**: provides kernel-computable,
+   `sorry`-free RUP (`rupStep`, `verifyRup`) and hint-indexed LRAT (`rupStepLrat`, `verifyLrat`)
+   checkers with proved soundness (`verifyRup_sound`, `verifyLrat_sound`) so SAT-based bounds can
+   be certified without `native_decide`.
+6. **Exact judged-bytes commit & hourly reconciliation (`scripts/ci-report.sh`, `scripts/reconcile.sh`)**:
+   the `report` job never runs Lean. It verifies `main` still holds the exact base file hash,
+   commits the exact judged bytes by SHA-1 blob hash as a workflow-authored commit (safely injecting
+   lemma imports into `Helpers.lean` above `namespace`), moves `main` without force, closes the PR,
+   and posts an HMAC-signed verdict (with `reason_code`) to Swarmdesk. The hourly `catch-up.yml`
+   workflow replays any missed records from GitHub-signed workflow commits on `main`.
