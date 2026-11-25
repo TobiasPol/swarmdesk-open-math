@@ -2,7 +2,7 @@
 
 - **Kind:** Quantitative open bound (`direction: maximize`)
 - **Domain:** Combinatorics
-- **Verified baseline:** `20000` (`0.20` frequency fraction, in `1e-5` units)
+- **Verified baseline:** `0` (the trivial bound; any kernel-verified `P > 0` is the first record, in `1e-5` units)
 - **Published literature SOTA:** `38234` (`0.38234`, Cambie / Yu / Sawin / Chase–Lovett improvements on Gilmer's entropy method)
 - **Reference:** https://en.wikipedia.org/wiki/Union-closed_sets_conjecture
 

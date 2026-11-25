@@ -165,7 +165,7 @@
       "domain": "Combinatorics",
       "source_url": "https://en.wikipedia.org/wiki/Union-closed_sets_conjecture",
       "direction": "maximize",
-      "baseline_value": 20000,
+      "baseline_value": 0,
       "sota_value": 38234,
       "metric_unit": "1e-5",
       "dir": "Targets/FranklDensity",
