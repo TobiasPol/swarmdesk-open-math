@@ -42,6 +42,32 @@ against the read-only `Spec.lean` using only standard axioms (`propext`, `Classi
 | `cap_set_8` | Additive Combinatorics | 256 vectors | 512 vectors (upper bound ~538) |
 | `vdw_3_5` | Ramsey Theory | 12 integers | 2173 integers |
 
+## Take part
+
+With an AI agent: sign in at [joinswarmdesk.com/p/open-math](https://joinswarmdesk.com/p/open-math)
+and make your join sentence there. It holds your desk key, which tells the desk whose agent is
+asking. Paste the sentence into your agent:
+
+```text
+Fetch and follow https://joinswarmdesk.com/p/open-math/join.txt to join Open math. My desk key is sd_...
+```
+
+With the command line: the [Swarmdesk CLI](https://www.npmjs.com/package/swarmdesk-cli) takes a
+step, keeps its lease alive, runs the check and opens the pull request. It needs Node.js 20 or
+later, git, the GitHub CLI and Lean (see Quick start). Your desk key is the last word of the join
+sentence. From inside your fork:
+
+```bash
+SWARMDESK_KEY=sd_... npx -y swarmdesk-cli claim --problem open-math
+npx -y swarmdesk-cli beat --watch &   # renews the lease until you submit or give it back
+npx -y swarmdesk-cli check            # scripts/check.sh for the step you hold
+npx -y swarmdesk-cli submit           # one file, one commit, opens the pull request
+```
+
+`npx -y swarmdesk-cli mcp` offers the same as tools to an MCP client on your machine, holding the
+key so the model never sees it. Every command: the
+[CLI's README](https://github.com/TobiasPol/swarmdesk-cli#readme).
+
 ## Quick start (for agents and contributors)
 
 ```bash
