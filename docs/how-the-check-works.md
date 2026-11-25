@@ -39,10 +39,12 @@ trusting the contributor or AI agent who submitted the Lean file.
    - Emits a structured allowlisted `reason_code` (`""`, `axiom_violation`, `type_mismatch`,
      `bound_not_improved`, `spec_altered`, `fault`, plus `guard_rejected`, `compile_error`, `timeout`
      from `ci-judge.sh`).
-5. **Zero-Axiom SAT Certification (`Targets/CertKit/Lrat.lean`)**: provides kernel-computable,
-   `sorry`-free RUP (`rupStep`, `verifyRup`) and hint-indexed LRAT (`rupStepLrat`, `verifyLrat`)
-   checkers with proved soundness (`verifyRup_sound`, `verifyLrat_sound`) so SAT-based bounds can
-   be certified without `native_decide`.
+5. **SAT Certification without `native_decide` (`Targets/CertKit/Lrat.lean`)**: provides
+   kernel-computable, `sorry`-free RUP (`rupStep`, `verifyRup`) and hint-indexed LRAT
+   (`rupStepLrat`, `verifyLrat`) checkers with proved soundness (`verifyRup_sound`,
+   `verifyLrat_sound`) so SAT-based bounds can be certified without `native_decide`. The
+   soundness theorems depend only on Lean's standard `propext` and `Quot.sound`
+   (no `Classical.choice`, no `sorryAx`).
 6. **Exact judged-bytes commit & hourly reconciliation (`scripts/ci-report.sh`, `scripts/reconcile.sh`)**:
    the `report` job never runs Lean. It verifies `main` still holds the exact base file hash,
    commits the exact judged bytes by SHA-1 blob hash as a workflow-authored commit (safely injecting

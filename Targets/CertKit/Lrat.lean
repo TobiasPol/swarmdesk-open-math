@@ -159,7 +159,7 @@ private theorem hasLit_sound {σ : Nat → Bool} {trail : List Lit} {l : Lit}
 
 private theorem hasContradiction_sound {σ : Nat → Bool} {trail : List Lit}
     (ht : SatTrail σ trail) (hc : hasContradiction trail = true) : False := by
-  obtain ⟨l, hl, hneg⟩ := (any_eq_true_iff (fun l => hasLit trail l.neg) trail).mp hc
+  obtain ⟨l, hl, hneg⟩ := (any_eq_true_iff (fun l : Lit => hasLit trail l.neg) trail).mp hc
   have h1 : evalLit σ l = true := ht l hl
   have h2 : evalLit σ l.neg = true := hasLit_sound ht hneg
   rw [evalLit_neg, h1] at h2
@@ -172,7 +172,7 @@ private theorem isFalsified_sound {σ : Nat → Bool} {trail : List Lit} {c : Cl
   | true =>
     obtain ⟨l, hl, hval⟩ := (any_eq_true_iff (evalLit σ) c).mp hc
     have hneg : hasLit trail l.neg = true :=
-      (all_eq_true_iff (fun x => hasLit trail x.neg) c).mp hf l hl
+      (all_eq_true_iff (fun x : Lit => hasLit trail x.neg) c).mp hf l hl
     have h2 : evalLit σ l.neg = true := hasLit_sound ht hneg
     rw [evalLit_neg, hval] at h2
     cases h2
@@ -203,8 +203,7 @@ private theorem isUnit_sound {σ : Nat → Bool} {trail : List Lit} {c : Clause}
     evalLit σ u = true := by
   unfold isUnit at hu
   cases hsat : c.any (fun l => hasLit trail l)
-  · rw [hsat] at hu
-    dsimp only at hu
+  · simp only [hsat, Bool.false_eq_true, ↓reduceIte] at hu
     cases hfilt : c.filter (fun l => !(hasLit trail l.neg)) with
     | nil => rw [hfilt] at hu; cases hu
     | cons a rest =>
@@ -256,11 +255,9 @@ private theorem rupLoop_sound {σ : Nat → Bool} {f : Cnf} (hf : evalCnf σ f =
   | fuel + 1, trail, ht, h => by
     unfold rupLoop at h
     cases hconf : f.any (isFalsified trail)
-    · rw [hconf] at h
-      dsimp only at h
+    · simp only [hconf, Bool.false_eq_true, ↓reduceIte] at h
       cases hemp : (f.filterMap (isUnit trail)).isEmpty
-      · rw [hemp] at h
-        dsimp only at h
+      · simp only [hemp, Bool.false_eq_true, ↓reduceIte] at h
         have ht' : SatTrail σ (f.filterMap (isUnit trail) ++ trail) := by
           intro l hl
           simp only [List.mem_append] at hl
@@ -302,6 +299,7 @@ theorem rupStep_sound (f : Cnf) (c : Clause) (h : rupStep f c = true) :
       rw [evalLit_neg, hxval]
       rfl
     unfold rupStep at h
+    dsimp only at h
     cases hcontra : hasContradiction (c.map Lit.neg)
     · rw [hcontra] at h
       exact rupLoop_sound hf (f.length + 1) (c.map Lit.neg) ht h
@@ -355,11 +353,11 @@ private theorem rupStepLratAux_sound {σ : Nat → Bool} {f : Cnf} (hf : evalCnf
     | none => rw [hnth] at h; cases h
     | some cl =>
       rw [hnth] at h
+      dsimp only at h
       have hclf : cl ∈ f := nthClause_mem f idx cl hnth
       have hcl : evalClause σ cl = true := (all_eq_true_iff (evalClause σ) f).mp hf cl hclf
       cases hfal : isFalsified trail cl
-      · rw [hfal] at h
-        dsimp only at h
+      · simp only [hfal, Bool.false_eq_true, ↓reduceIte] at h
         cases hunit : isUnit trail cl with
         | none => rw [hunit] at h; cases h
         | some u =>
@@ -397,6 +395,7 @@ theorem rupStepLrat_sound (f : Cnf) (c : Clause) (hints : List Nat)
       rw [evalLit_neg, hxval]
       rfl
     unfold rupStepLrat at h
+    dsimp only at h
     cases hcontra : hasContradiction (c.map Lit.neg)
     · rw [hcontra] at h
       exact rupStepLratAux_sound hf hints (c.map Lit.neg) ht h
